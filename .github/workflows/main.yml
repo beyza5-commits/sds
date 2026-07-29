@@ -1,0 +1,244 @@
+name: Build Teleprompter IPA
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Gerekli Aracı Kur (Xcodegen)
+        run: brew install xcodegen
+
+      - name: Tüm Projeyi ve Kodları Tek Seferde Yaz
+        run: |
+          cat << 'EOF' > Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>UIBackgroundModes</key>
+              <array>
+                  <string>audio</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+          
+          cat << 'EOF' > project.yml
+          name: Teleprompter
+          options:
+            bundleIdPrefix: com.teleprompter
+          targets:
+            Teleprompter:
+              type: application
+              platform: iOS
+              deploymentTarget: "15.0"
+              sources: [Sources]
+              info:
+                path: Info.plist
+          EOF
+          
+          mkdir Sources
+          cat << 'EOF' > Sources/App.swift
+          import SwiftUI
+          @main
+          struct TeleprompterApp: App {
+              var body: some Scene {
+                  WindowGroup { ContentView() }
+              }
+          }
+          EOF
+          
+          cat << 'EOF' > Sources/ContentView.swift
+          import SwiftUI
+          import AVKit
+          import UIKit
+          
+          struct ContentView: View {
+              @StateObject var pipManager = PiPManager()
+              
+              @AppStorage("tp_text") var text: String = "Kusursuz teleprompter'a hoş geldin! Metnini buraya yapıştır..."
+              @AppStorage("tp_speed") var speed: Double = 1.5
+              @AppStorage("tp_size") var fontSize: Double = 40.0
+              
+              init() {
+                  // TextEditor'ın arka planını temizle ki arkadaki gri kutumuz görünsün
+                  UITextView.appearance().backgroundColor = .clear
+              }
+              
+              var body: some View {
+                  ZStack {
+                      Color(red: 0.07, green: 0.07, blue: 0.07).edgesIgnoringSafeArea(.all)
+                      
+                      VStack(spacing: 20) {
+                          VStack(spacing: 5) {
+                              Text("Kusursuz Teleprompter")
+                                  .font(.system(size: 24, weight: .bold))
+                                  .foregroundColor(.white)
+                              Text("PiP açıldığında ekranı kaplaması için pencereye çift tıklayın veya parmaklarınızla büyütün.")
+                                  .font(.system(size: 13))
+                                  .foregroundColor(.gray)
+                                  .multilineTextAlignment(.center)
+                          }
+                          .padding(.top, 15)
+                          
+                          // ZEKİCE ÇÖZÜM: Görünür, Çerçeveli ve Şık Metin Kutusu
+                          ZStack(alignment: .topLeading) {
+                              Color(red: 0.15, green: 0.15, blue: 0.15) // Belirgin Koyu Gri
+                                  .cornerRadius(12)
+                                  .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.4), lineWidth: 1))
+                              
+                              TextEditor(text: $text)
+                                  .foregroundColor(.white)
+                                  .font(.system(size: 18))
+                                  .padding(10)
+                          }
+                          .frame(height: 220)
+                          
+                          // AYARLAR PANELİ
+                          VStack(spacing: 15) {
+                              VStack(spacing: 5) {
+                                  HStack { Text("Okuma Hızı").foregroundColor(.gray).bold(); Spacer(); Text("\(String(format: "%.1f", speed))").foregroundColor(.white).bold() }
+                                  Slider(value: $speed, in: 0.5...5.0, step: 0.1).accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
+                              }
+                              VStack(spacing: 5) {
+                                  HStack { Text("Yazı Boyutu").foregroundColor(.gray).bold(); Spacer(); Text("\(Int(fontSize)) px").foregroundColor(.white).bold() }
+                                  Slider(value: $fontSize, in: 20...90, step: 1).accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
+                              }
+                          }
+                          .padding(20)
+                          .background(Color(red: 0.12, green: 0.12, blue: 0.12))
+                          .cornerRadius(16)
+                          
+                          PiPSourceView(pipManager: pipManager).frame(width: 0, height: 0).opacity(0)
+                          
+                          Spacer()
+                          
+                          Button(action: {
+                              // Klavyeyi kapat
+                              UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                              
+                              pipManager.setupPiP(text: text, speed: CGFloat(speed), fontSize: CGFloat(fontSize))
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { pipManager.startPiP() }
+                          }) {
+                              Text("KAMERAYA GEÇ (PiP BAŞLAT)")
+                                  .font(.system(size: 18, weight: .bold))
+                                  .frame(maxWidth: .infinity)
+                                  .padding(.vertical, 18)
+                                  .background(Color(red: 1.0, green: 0.16, blue: 0.37))
+                                  .foregroundColor(.white)
+                                  .cornerRadius(16)
+                                  .shadow(color: Color(red: 1.0, green: 0.16, blue: 0.37).opacity(0.4), radius: 8, x: 0, y: 4)
+                          }
+                          .padding(.bottom, 10)
+                      }
+                      .padding(.horizontal, 20)
+                  }
+                  // Zekice UX Dokunuşu: Boşluğa tıklayınca açık kalan klavyeyi kapatır
+                  .onTapGesture {
+                      UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                  }
+              }
+          }
+          
+          struct PiPSourceView: UIViewRepresentable {
+              @ObservedObject var pipManager: PiPManager
+              func makeUIView(context: Context) -> UIView {
+                  let view = UIView()
+                  DispatchQueue.main.async { self.pipManager.sourceView = view }
+                  return view
+              }
+              func updateUIView(_ uiView: UIView, context: Context) {}
+          }
+          
+          class PiPManager: NSObject, ObservableObject {
+              var pipController: AVPictureInPictureController?
+              var sourceView: UIView?
+              var scrollTimer: Timer?
+              var label: UILabel?
+              var speed: CGFloat = 1.5
+              
+              func setupPiP(text: String, speed: CGFloat, fontSize: CGFloat) {
+                  guard let srcView = sourceView, AVPictureInPictureController.isPictureInPictureSupported() else { return }
+                  self.speed = speed
+                  
+                  let audioSession = AVAudioSession.sharedInstance()
+                  try? audioSession.setCategory(.playback, mode: .moviePlayback, options: .mixWithOthers)
+                  try? audioSession.setActive(true)
+                  
+                  let pipVC = AVPictureInPictureVideoCallViewController()
+                  
+                  // İŞTE ZEKİCE HAMLE BURADA: 2.4 / 1 Oranı!
+                  // 1200x500, Apple'ın sistemi çökertmeden izin verdiği en ince şerittir.
+                  pipVC.preferredContentSize = CGSize(width: 1200, height: 500)
+                  pipVC.view.backgroundColor = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.85) 
+                  
+                  let cleanText = text.replacingOccurrences(of: "\n", with: " ")
+                  let paddedText = "                     " + cleanText + "                     "
+                  
+                  let lbl = UILabel()
+                  lbl.text = paddedText
+                  lbl.textColor = .white
+                  lbl.font = UIFont.systemFont(ofSize: fontSize, weight: .bold)
+                  lbl.shadowColor = UIColor.black
+                  lbl.shadowOffset = CGSize(width: 2, height: 2) // Kameranın parlaklığında yazının kaybolmaması için
+                  lbl.sizeToFit()
+                  
+                  lbl.frame = CGRect(x: 1200, y: 0, width: lbl.frame.width, height: lbl.frame.height)
+                  self.label = lbl
+                  
+                  pipVC.view.addSubview(lbl)
+                  
+                  let source = AVPictureInPictureController.ContentSource(activeVideoCallSourceView: srcView, contentViewController: pipVC)
+                  pipController = AVPictureInPictureController(contentSource: source)
+                  pipController?.canStartPictureInPictureAutomaticallyFromInline = true
+              }
+              
+              func startPiP() {
+                  pipController?.startPictureInPicture()
+                  startScrolling()
+              }
+              
+              func startScrolling() {
+                  scrollTimer?.invalidate()
+                  var initialWait = 125 
+                  var isPositionSet = false
+                  
+                  scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
+                      guard let self = self, let lbl = self.label, let parentView = lbl.superview else { return }
+                      
+                      // Yazıyı her saniye ekranın dikey olarak tam merkezinde tutar
+                      if !isPositionSet {
+                          lbl.center.y = parentView.bounds.midY
+                          lbl.frame.origin.x = parentView.bounds.width
+                          isPositionSet = true
+                      }
+                      
+                      if initialWait > 0 {
+                          initialWait -= 1
+                          return
+                      }
+                      
+                      lbl.frame.origin.x -= self.speed
+                      
+                      if lbl.frame.maxX < 0 {
+                          lbl.frame.origin.x = parentView.bounds.width 
+                          initialWait = 50 
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Projeyi Derle ve IPA Oluştur
+        run: |
+          xcodegen generate
+          xcodebuild clean build -project Teleprompter.xcodeproj -scheme Teleprompter -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -sdk iphoneos -derivedDataPath build
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/Teleprompter.app Payload/
+          zip -r Teleprompter.ipa Payload
+
+      - name: IPA Dosyasını Ver
+        uses: actions/upload-artifact@v4
+        with:
+          name: NihaiTeleprompter-IPA
+          path: Teleprompter.ipa
