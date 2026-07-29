@@ -61,81 +61,93 @@ jobs:
               @AppStorage("tp_size") var fontSize: Double = 40.0
               
               init() {
-                  // TextEditor'ın arka planını temizle ki arkadaki gri kutumuz görünsün
                   UITextView.appearance().backgroundColor = .clear
               }
               
               var body: some View {
                   ZStack {
+                      // Koyu Arka Plan
                       Color(red: 0.07, green: 0.07, blue: 0.07).edgesIgnoringSafeArea(.all)
                       
-                      VStack(spacing: 20) {
-                          VStack(spacing: 5) {
+                      VStack(spacing: 15) {
+                          
+                          // BAŞLIK
+                          VStack(spacing: 4) {
                               Text("Kusursuz Teleprompter")
                                   .font(.system(size: 24, weight: .bold))
                                   .foregroundColor(.white)
-                              Text("PiP açıldığında ekranı kaplaması için pencereye çift tıklayın veya parmaklarınızla büyütün.")
+                              Text("Metninizi girin ve başlatın. Yüzen pencere ekran üzerinde sağdan sola tam genişlikte akacaktır.")
                                   .font(.system(size: 13))
-                                  .foregroundColor(.gray)
+                                  .foregroundColor(Color.gray)
                                   .multilineTextAlignment(.center)
                           }
-                          .padding(.top, 15)
+                          .padding(.top, 10)
                           
-                          // ZEKİCE ÇÖZÜM: Görünür, Çerçeveli ve Şık Metin Kutusu
-                          ZStack(alignment: .topLeading) {
-                              Color(red: 0.15, green: 0.15, blue: 0.15) // Belirgin Koyu Gri
-                                  .cornerRadius(12)
-                                  .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.4), lineWidth: 1))
-                              
-                              TextEditor(text: $text)
-                                  .foregroundColor(.white)
-                                  .font(.system(size: 18))
-                                  .padding(10)
-                          }
-                          .frame(height: 220)
+                          // FERAH METİN ALANI (Ekranın kalan tüm yüksekliğini kaplar)
+                          TextEditor(text: $text)
+                              .font(.system(size: 16))
+                              .foregroundColor(.white)
+                              .padding(12)
+                              .background(Color(red: 0.12, green: 0.12, blue: 0.12))
+                              .cornerRadius(16)
+                              .overlay(
+                                  RoundedRectangle(cornerRadius: 16)
+                                      .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                              )
+                              .frame(maxWidth: .infinity, maxHeight: .infinity)
                           
                           // AYARLAR PANELİ
-                          VStack(spacing: 15) {
-                              VStack(spacing: 5) {
-                                  HStack { Text("Okuma Hızı").foregroundColor(.gray).bold(); Spacer(); Text("\(String(format: "%.1f", speed))").foregroundColor(.white).bold() }
-                                  Slider(value: $speed, in: 0.5...5.0, step: 0.1).accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
+                          VStack(spacing: 12) {
+                              // HIZ
+                              VStack(spacing: 4) {
+                                  HStack {
+                                      Text("Okuma Hızı").foregroundColor(.gray).font(.system(size: 13, weight: .bold))
+                                      Spacer()
+                                      Text("\(Int(speed * 50)) k/dk").foregroundColor(.white).bold().font(.system(size: 13))
+                                  }
+                                  Slider(value: $speed, in: 0.5...4.0, step: 0.1)
+                                      .accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
                               }
-                              VStack(spacing: 5) {
-                                  HStack { Text("Yazı Boyutu").foregroundColor(.gray).bold(); Spacer(); Text("\(Int(fontSize)) px").foregroundColor(.white).bold() }
-                                  Slider(value: $fontSize, in: 20...90, step: 1).accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
+                              
+                              // BOYUT
+                              VStack(spacing: 4) {
+                                  HStack {
+                                      Text("Yazı Boyutu").foregroundColor(.gray).font(.system(size: 13, weight: .bold))
+                                      Spacer()
+                                      Text("\(Int(fontSize)) px").foregroundColor(.white).bold().font(.system(size: 13))
+                                  }
+                                  Slider(value: $fontSize, in: 20...80, step: 1)
+                                      .accentColor(Color(red: 1.0, green: 0.16, blue: 0.37))
                               }
                           }
-                          .padding(20)
+                          .padding(15)
                           .background(Color(red: 0.12, green: 0.12, blue: 0.12))
                           .cornerRadius(16)
                           
-                          PiPSourceView(pipManager: pipManager).frame(width: 0, height: 0).opacity(0)
+                          // GİZLİ PiP KAYNAĞI
+                          PiPSourceView(pipManager: pipManager)
+                              .frame(width: 1, height: 1)
+                              .opacity(0.01)
                           
-                          Spacer()
-                          
+                          // BAŞLAT BUTONU
                           Button(action: {
-                              // Klavyeyi kapat
-                              UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                              
                               pipManager.setupPiP(text: text, speed: CGFloat(speed), fontSize: CGFloat(fontSize))
-                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { pipManager.startPiP() }
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                  pipManager.startPiP()
+                              }
                           }) {
-                              Text("KAMERAYA GEÇ (PiP BAŞLAT)")
-                                  .font(.system(size: 18, weight: .bold))
+                              Text("Teleprompter'ı Başlat (Yüzen Pencere)")
+                                  .font(.system(size: 17, weight: .bold))
                                   .frame(maxWidth: .infinity)
-                                  .padding(.vertical, 18)
+                                  .padding(.vertical, 16)
                                   .background(Color(red: 1.0, green: 0.16, blue: 0.37))
                                   .foregroundColor(.white)
                                   .cornerRadius(16)
-                                  .shadow(color: Color(red: 1.0, green: 0.16, blue: 0.37).opacity(0.4), radius: 8, x: 0, y: 4)
+                                  .shadow(color: Color(red: 1.0, green: 0.16, blue: 0.37).opacity(0.4), radius: 10, x: 0, y: 5)
                           }
                           .padding(.bottom, 10)
                       }
                       .padding(.horizontal, 20)
-                  }
-                  // Zekice UX Dokunuşu: Boşluğa tıklayınca açık kalan klavyeyi kapatır
-                  .onTapGesture {
-                      UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                   }
               }
           }
@@ -154,6 +166,7 @@ jobs:
               var pipController: AVPictureInPictureController?
               var sourceView: UIView?
               var scrollTimer: Timer?
+              
               var label: UILabel?
               var speed: CGFloat = 1.5
               
@@ -167,10 +180,10 @@ jobs:
                   
                   let pipVC = AVPictureInPictureVideoCallViewController()
                   
-                  // İŞTE ZEKİCE HAMLE BURADA: 2.4 / 1 Oranı!
-                  // 1200x500, Apple'ın sistemi çökertmeden izin verdiği en ince şerittir.
-                  pipVC.preferredContentSize = CGSize(width: 1200, height: 500)
-                  pipVC.view.backgroundColor = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.85) 
+                  // Yüzen Pencere Oranı: İnce Uzun Şerit (Tam genişlik algısı için 1200x120)
+                  pipVC.preferredContentSize = CGSize(width: 1200, height: 120)
+                  pipVC.view.backgroundColor = UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.85)
+                  pipVC.view.clipsToBounds = true
                   
                   let cleanText = text.replacingOccurrences(of: "\n", with: " ")
                   let paddedText = "                     " + cleanText + "                     "
@@ -180,10 +193,11 @@ jobs:
                   lbl.textColor = .white
                   lbl.font = UIFont.systemFont(ofSize: fontSize, weight: .bold)
                   lbl.shadowColor = UIColor.black
-                  lbl.shadowOffset = CGSize(width: 2, height: 2) // Kameranın parlaklığında yazının kaybolmaması için
+                  lbl.shadowOffset = CGSize(width: 1, height: 1)
                   lbl.sizeToFit()
                   
-                  lbl.frame = CGRect(x: 1200, y: 0, width: lbl.frame.width, height: lbl.frame.height)
+                  // Başlangıç konumu: Sağdan başlasın
+                  lbl.frame = CGRect(x: 1200, y: 0, width: lbl.frame.width, height: 120)
                   self.label = lbl
                   
                   pipVC.view.addSubview(lbl)
@@ -200,13 +214,13 @@ jobs:
               
               func startScrolling() {
                   scrollTimer?.invalidate()
-                  var initialWait = 125 
+                  
+                  var initialWait = 50
                   var isPositionSet = false
                   
                   scrollTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
                       guard let self = self, let lbl = self.label, let parentView = lbl.superview else { return }
                       
-                      // Yazıyı her saniye ekranın dikey olarak tam merkezinde tutar
                       if !isPositionSet {
                           lbl.center.y = parentView.bounds.midY
                           lbl.frame.origin.x = parentView.bounds.width
@@ -221,8 +235,8 @@ jobs:
                       lbl.frame.origin.x -= self.speed
                       
                       if lbl.frame.maxX < 0 {
-                          lbl.frame.origin.x = parentView.bounds.width 
-                          initialWait = 50 
+                          lbl.frame.origin.x = parentView.bounds.width
+                          initialWait = 30
                       }
                   }
               }
@@ -240,5 +254,5 @@ jobs:
       - name: IPA Dosyasını Ver
         uses: actions/upload-artifact@v4
         with:
-          name: NihaiTeleprompter-IPA
+          name: KusursuzTasarim-IPA
           path: Teleprompter.ipa
